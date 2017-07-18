@@ -29,6 +29,8 @@ typedef void (*receive_callback)(void* context, int connector_id,
 // 定时器回调
 typedef void (*timer_callback)(void* context, int timer_id, float seconds);
 
+unsigned int GetTickCount();
+
 class CTickTimer;
 struct epoll_event;
 

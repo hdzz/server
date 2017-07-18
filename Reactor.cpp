@@ -22,6 +22,14 @@ double g_dTimerPerfCounter = 0.0;
 #define MAKE_EV_DATA(type, index, sock) \
 	((UINT64((type << 24) + index) << 32) + UINT64(sock))
 
+unsigned int GetTickCount()
+{
+	struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
 // Reactor
 
 struct CReactor::broadcast_t
@@ -92,11 +100,11 @@ struct CReactor::timer_t
 CReactor::CReactor()
 {
 	m_nEventsPerLoop = INIT_EVENTS_PER_LOOP;
-	m_pEvents = NEW struct epoll_event[m_nEventsPerLoop];
+	m_pEvents = new struct epoll_event[m_nEventsPerLoop];
 	//ASSERT_RETURN(m_pEvents);
 	m_Epoll = -1;
 	m_fMinTime = 1.0f;
-	//m_pTimer = NEW CTickTimer;
+	//m_pTimer = new CTickTimer;
 	//ASSERT_RETURN(m_pTimer);
 }
 
@@ -226,7 +234,7 @@ int CReactor::CreateBroadcast(const char* local_addr, const char* broad_addr,
 		return -1;
 	}
 
-	broadcast_t* pBroad = NEW broadcast_t;
+	broadcast_t* pBroad = new broadcast_t;
 	ASSERT_RETURN_VALUE(pBroad, -1);
 	
 	memset(pBroad, 0, sizeof(broadcast_t));
@@ -235,7 +243,7 @@ int CReactor::CreateBroadcast(const char* local_addr, const char* broad_addr,
 	strncpy(pBroad->strBroadAddr, broad_addr, sizeof(pBroad->strBroadAddr));
 	pBroad->nPort = port;
 	pBroad->nInBufferLen = in_buf_len;
-	//pBroad->pInBuf = NEW char[in_buf_len];
+	//pBroad->pInBuf = new char[in_buf_len];
 	ASSERT_RETURN_VALUE(pBroad->pInBuf, -1);
 	pBroad->BroadcastCallback = cb;
 	pBroad->pContext = context;
@@ -282,7 +290,7 @@ bool CReactor::DeleteBroadcast(int broadcast_id)
 
 	//ASSERT_RETURN_VALUE(pBroad != NULL, false);
 
-	if (pBroad->Socket != PORT_INVALID_SOCKET)
+	if (pBroad->Socket != INVALID_SOCKET)
 	{
 		// 从EPOLL移除
 		struct epoll_event ev;
@@ -376,7 +384,7 @@ bool CReactor::InitUdp(const char* addr, int port)
 		return false;
 	}
 
-	m_pUdp = NEW udp_t;
+	m_pUdp = new udp_t;
 	//ASSERT_RETURN_VALUE(m_pUdp, false);
 	m_pUdp->socket = sock;
 	strncpy(m_pUdp->strAddr, addr, sizeof(m_pUdp->strAddr));
@@ -403,7 +411,7 @@ bool CReactor::SendUdp(const void* pdata, size_t len)
 
 bool CReactor::DeleteUdp()
 {
-	if (m_pUdp->socket != PORT_INVALID_SOCKET)
+	if (m_pUdp->socket != INVALID_SOCKET)
 	{
 		 SocketClose(m_pUdp->socket);
 	}
@@ -470,7 +478,7 @@ int CReactor::CreateListener(const char* addr, int port, int backlog,
 		return -1;
 	}
 
-	listener_t* pListener = NEW listener_t;
+	listener_t* pListener = new listener_t;
 	//ASSERT_RETURN_VALUE(pListener, -1);
 
 	memset(pListener, 0, sizeof(listener_t));
@@ -527,7 +535,7 @@ bool CReactor::DeleteListener(int listener_id)
 	{
 		return false;
 	}
-	if (pListener->Socket != PORT_INVALID_SOCKET)
+	if (pListener->Socket != INVALID_SOCKET)
 	{
 		// 从EPOLL移除
 		struct epoll_event ev;
@@ -554,14 +562,14 @@ size_t CReactor::GetListenerSock(int listener_id)
 {
 	if (size_t(listener_id) >= m_Listeners.size())
 	{
-		return PORT_INVALID_SOCKET;
+		return INVALID_SOCKET;
 	}
 
 	listener_t* pListener = m_Listeners[listener_id];
 
 	if (NULL == pListener)
 	{
-		return PORT_INVALID_SOCKET;
+		return INVALID_SOCKET;
 	}
 
 	return (size_t)pListener->Socket;
@@ -619,7 +627,7 @@ int CReactor::CreateConnector(const char* addr, int port, size_t in_buf_len,
 		return -1;
 	}
 
-	connector_t* pConnect = NEW connector_t;
+	connector_t* pConnect = new connector_t;
 	ASSERT_RETURN_VALUE(pConnect, -1);
 
 	memset(pConnect, 0, sizeof(connector_t));
@@ -628,8 +636,8 @@ int CReactor::CreateConnector(const char* addr, int port, size_t in_buf_len,
 	pConnect->nOutBufferLen = out_buf_len;
 	pConnect->nOutBufferMax = out_buf_max;
 	pConnect->nSendEmpty = 1;
-	pConnect->pInBuf = NEW char[in_buf_len];
-	pConnect->pOutBuf = NEW char[out_buf_len];
+	pConnect->pInBuf = new char[in_buf_len];
+	pConnect->pOutBuf = new char[out_buf_len];
 	ASSERT_RETURN_VALUE(pConnect->pInBuf, -1);
 	ASSERT_RETURN_VALUE(pConnect->pOutBuf, -1);
 	pConnect->pSendBegin = pConnect->pOutBuf;
@@ -726,7 +734,7 @@ bool CReactor::DeleteConnector(int connector_id)
 		return false;
 	}
 
-	if (pConnect->Socket != PORT_INVALID_SOCKET)
+	if (pConnect->Socket != INVALID_SOCKET)
 	{
 		// 从EPOLL移除
 		struct epoll_event ev;
@@ -763,7 +771,7 @@ bool CReactor::ShutdownConnector(int connector_id)
 		return false;
 	}
 
-	if (pConnect->Socket != PORT_INVALID_SOCKET)
+	if (pConnect->Socket != INVALID_SOCKET)
 	{
 		if (!SocketShutdownSend(pConnect->Socket))
 		{
@@ -804,11 +812,11 @@ static bool expand_out_buffer(CReactor::connector_t* pConnect,
 			// 调试用，记录移动大块内存的日志
 			if (send_remain > 0x100000)
 			{
-				char info[128];
-				SafeSprintf(info, sizeof(info), 
+				/*char info[128];
+				snprintf(info, sizeof(info), 
 					"(CReactor::expand_out_buffer)memmove big data %u bytes, %s:%d!",
 					send_remain, pConnect->strAddr, pConnect->nPort);
-				std::cout << (info);
+				std::cout << (info);*/
 			}
 			
 			// 将剩余需要发送的数据移动最前面
@@ -822,7 +830,7 @@ static bool expand_out_buffer(CReactor::connector_t* pConnect,
 	{
 		size_t new_size = 0;
 
-		port_memory_info_t mem_info;
+		/*port_memory_info_t mem_info;
 		 GetMemoryInfo(&mem_info);
 		if (mem_info.dMemoryLoad < 0.9) 
 		{
@@ -862,7 +870,7 @@ static bool expand_out_buffer(CReactor::connector_t* pConnect,
 			}
 		}
 
-		char* pNewBuf = NEW char[new_size];
+		char* pNewBuf = new char[new_size];
 		ASSERT_RETURN_VALUE(pNewBuf, false);
 
 		if (pNewBuf == NULL)
@@ -880,7 +888,7 @@ static bool expand_out_buffer(CReactor::connector_t* pConnect,
 		pConnect->pOutBuf = pNewBuf;
 		pConnect->nOutBufferLen = new_size;
 		pConnect->pSendBegin = pNewBuf;
-		pConnect->nSendOffset = 0;
+		pConnect->nSendOffset = 0;*/
 	}
 
 	return true;
@@ -929,7 +937,7 @@ bool CReactor::ForceSend(connector_t* pConnect, size_t need_size)
 		else
 		{
 			char info[128];
-			SafeSprintf(info, sizeof(info), 
+			snprintf(info, sizeof(info), 
 				"(CReactor::ForceSend)send %d bytes", res);
 			std::cout << (info);
 		}
@@ -1024,8 +1032,8 @@ bool CReactor::Send(int connector_id, const void* pdata, size_t len,
 		if (!expand_out_buffer(pConnect, len, force))
 		{
 			char info[128];
-			SafeSprintf(info, sizeof(info), 
-				"(CReactor::Send)buffer overflow, need %d bytes", len);
+			snprintf(info, sizeof(info), 
+				"(CReactor::Send)buffer overflow, need %u bytes", (UINT32)len);
 			std::cout << (info);
 			return false;
 		}
@@ -1078,8 +1086,8 @@ bool CReactor::Send2(int connector_id, const void* pdata1, size_t len1,
 		if (!expand_out_buffer(pConnect, len, force))
 		{
 			char info[128];
-			SafeSprintf(info, sizeof(info), 
-				"(CReactor::Send2)buffer overflow, need %d bytes", len);
+			snprintf(info, sizeof(info), 
+				"(CReactor::Send2)buffer overflow, need %u bytes", (UINT32)len);
 			std::cout << (info);
 			return false;
 		}
@@ -1136,8 +1144,8 @@ bool CReactor::Send3(int connector_id, const void* pdata1, size_t len1,
 		if (!expand_out_buffer(pConnect, len, force))
 		{
 			char info[128];
-			SafeSprintf(info, sizeof(info), 
-				"(CReactor::Send3)buffer overflow, need %d bytes", len);
+			snprintf(info, sizeof(info), 
+				"(CReactor::Send3)buffer overflow, need %u bytes", (UINT32)len);
 			std::cout << (info);
 			return false;
 		}
@@ -1182,7 +1190,7 @@ int CReactor::CreateTimer(float seconds, timer_callback cb, void* context)
 		return -1;
 	}
 
-	timer_t* pTimer = NEW timer_t;
+	timer_t* pTimer = new timer_t;
 	ASSERT_RETURN_VALUE(pTimer, -1);
 
 	pTimer->fSeconds = seconds;
@@ -1272,7 +1280,7 @@ bool CReactor::CloseConnect(size_t index)
 	void* context = pConnect->pContext;
 	int port = pConnect->nPort;
 	char addr[32];
-	strncpy(addr, sizeof(addr), pConnect->strAddr);
+	strncpy(addr, pConnect->strAddr, sizeof(addr));
 
 	DeleteConnector((int)index);
 
@@ -1339,8 +1347,7 @@ void CReactor::EventLoop()
 				// 通讯繁忙时增加每次检测的事件数量
 				size_t new_event_num = m_nEventsPerLoop * 2;
 				struct epoll_event* new_events = 
-					NEW struct epoll_event[new_event_num];
-				ASSERT_RETURN(new_events);
+					new struct epoll_event[new_event_num];
 
 				if (new_events)
 				{
@@ -1356,22 +1363,22 @@ void CReactor::EventLoop()
 		if (errno != EINTR)
 		{
 			std::cout << ("(CReactor::EventLoop)epoll_wait error. errno:%d ", errno);
-			if (nEventTick <= 0)
+			/*if (nEventTick <= 0)
 			{	//休眠1毫秒，避免CPU100%
 				usleep(1000);
-			}
+			}*/
 		}
 	}
 
 	if (m_nEventsPerLoop >= MAX_EVENTS_PER_LOOP)
 	{
 		printf("m_nEventsPerLoop>=MAX_EVENTS_PER_LOOP(%d)", MAX_EVENTS_PER_LOOP);
-		ASSERT_RETURN(0);
+		return;
 	}
 
 	unsigned int nTimerTick =  GetTickCount();
 
-	float elapse = (float)m_pTimer->GetElapseMillisec() * 0.001f;
+	/*float elapse = (float)m_pTimer->GetElapseMillisec() * 0.001f;
 	
 	// 检查所有的定时器
 	if (!m_Timers.empty())
@@ -1397,7 +1404,7 @@ void CReactor::EventLoop()
 				pTimer->TimerCallback(pTimer->pContext, (int)i, seconds);
 			}
 		}
-	}
+	}*/
 
 	nTimerTick =  GetTickCount() - nTimerTick;
 
@@ -1408,7 +1415,6 @@ void CReactor::EventLoop()
 		std::cout << ("EvnetLoop running exceed %ums, event %ums read %ums wirte %ums err %ums timer %ums\n",
 			nTotalTick, nEventTick, nReadTick, nWirteTick, nErrorTick, nTimerTick);
 	}
-
 }
 
 bool CReactor::ProcessWrite(size_t index, int sock)
@@ -1519,9 +1525,10 @@ bool CReactor::ProcessWrite(size_t index, int sock)
 			&& (pConnect->nOutBufferLen > pConnect->nOutBufferMax))
 		{
 			// 收缩缓冲区
-			char* pNewBuf = NEW char[pConnect->nOutBufferMax];
+			char* pNewBuf = new char[pConnect->nOutBufferMax];
 			ASSERT_RETURN_VALUE(pNewBuf, false);
-			SAFE_DELETE_ARRAY(pConnect->pOutBuf);
+			//SAFE_DELETE_ARRAY(pConnect->pOutBuf);
+			delete pConnect->pOutBuf;
 			pConnect->nOutBufferLen = pConnect->nOutBufferMax;
 			pConnect->pOutBuf = pNewBuf;
 		}
@@ -1624,7 +1631,7 @@ bool CReactor::ProcessRead(size_t index, int sock)
 
 		socket_t new_sock = accept(sock, (sockaddr*)&sa, &len); 
 
-		if (PORT_INVALID_SOCKET == new_sock)
+		if (INVALID_SOCKET == new_sock)
 		{
 			char info[128];
 			std::cout << ("(CReactor::ProcessRead)accept failed");
@@ -1642,7 +1649,7 @@ bool CReactor::ProcessRead(size_t index, int sock)
 			return false;
 		}
 
-		connector_t* pConnect = NEW connector_t;
+		connector_t* pConnect = new connector_t;
 		ASSERT_RETURN_VALUE(pConnect, false);
 
 		memset(pConnect, 0, sizeof(connector_t));
@@ -1651,8 +1658,8 @@ bool CReactor::ProcessRead(size_t index, int sock)
 		pConnect->nOutBufferLen = pListener->nOutBufferLen;
 		pConnect->nOutBufferMax = pListener->nOutBufferMax;
 		pConnect->nSendEmpty = 1;
-		pConnect->pInBuf = NEW char[pListener->nInBufferLen];
-		pConnect->pOutBuf = NEW char[pListener->nOutBufferLen];
+		pConnect->pInBuf = new char[pListener->nInBufferLen];
+		pConnect->pOutBuf = new char[pListener->nOutBufferLen];
 		ASSERT_RETURN_VALUE(pConnect->pInBuf, false);
 		ASSERT_RETURN_VALUE(pConnect->pOutBuf, false);
 		pConnect->pSendBegin = pConnect->pOutBuf;
@@ -1830,7 +1837,7 @@ bool CReactor::SetContext(int connector_id, void* context)
 
 bool CReactor::Dump(const char* file_name)
 {
-	FILE* fp =  FileOpen(file_name, "wb");
+	FILE* fp = fopen(file_name, "wb");
 
 	if (NULL == fp)
 	{

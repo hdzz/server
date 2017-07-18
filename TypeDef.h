@@ -7,9 +7,9 @@ typedef long long INT64;
 typedef unsigned long long UINT64;
 
 #define ASSERT_RETURN_VALUE(exp, ret) \
-	if (!exp) \
+	if (!(exp)) \
 	{\
-		return ret;\
+		return (ret);\
 	}
 
 #endif
